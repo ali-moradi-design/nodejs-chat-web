@@ -66,6 +66,16 @@ for (const file of walk(ROOT)) {
         errors.push(`${rel}: layer '${fromLayer}' must not import higher '${spec}'`);
       }
 
+      if (fromLayer === 'shared' && ['app','pages','widgets','features','entities'].includes(toLayer)) {
+        errors.push(`${rel}: shared must not import '${spec}'`);
+      }
+      if (fromLayer === 'entities' && ['app','pages','widgets','features'].includes(toLayer)) {
+        errors.push(`${rel}: entities must not import '${spec}'`);
+      }
+      if (fromLayer === 'features' && ['app','pages','widgets'].includes(toLayer)) {
+        errors.push(`${rel}: features must not import '${spec}'`);
+      }
+
       const m = spec.match(/^@\/(features|entities|widgets|pages)\/([^/]+)(?:\/(.*))?$/);
       if (m) {
         const [, layer, slice, rest] = m;

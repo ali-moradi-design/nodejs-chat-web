@@ -1,4 +1,4 @@
-import { getSocket } from '@/shared/lib/socket';
+import { getSocket, SocketEvents } from '@/shared/lib/socket';
 import { useChatStore } from '@/shared/lib/chat';
 
 let typingTimer: ReturnType<typeof setTimeout> | null = null;
@@ -11,7 +11,7 @@ export function notifyTyping(): void {
 
   if (!isTyping) {
     isTyping = true;
-    socket.emit('typing:start', { roomId });
+    socket.emit(SocketEvents.TypingStart, { roomId });
   }
 
   if (typingTimer) clearTimeout(typingTimer);
@@ -28,7 +28,7 @@ export function stopTyping(): void {
     typingTimer = null;
   }
   if (isTyping && socket) {
-    socket.emit('typing:stop', { roomId });
+    socket.emit(SocketEvents.TypingStop, { roomId });
   }
   isTyping = false;
 }

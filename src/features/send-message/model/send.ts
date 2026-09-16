@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { getSocket, type MessageAck } from '@/shared/lib/socket';
+import { getSocket, SocketEvents, type MessageAck } from '@/shared/lib/socket';
 import { useChatStore } from '@/shared/lib/chat';
 
 export function sendMessage(text: string): void {
@@ -32,7 +32,7 @@ export function sendMessage(text: string): void {
   }
 
   socket.emit(
-    'message:send',
+    SocketEvents.MessageSend,
     {
       roomId: activeRoomId,
       text: optimistic.text,
