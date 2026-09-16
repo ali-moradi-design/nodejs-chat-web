@@ -1,10 +1,11 @@
-import { getSocket, SocketEvents, type ChatMessage } from '@/shared/lib/socket';
+import { getSocket, SocketEvents, type ChatMessage, type MessageAck } from '@/shared/lib/socket';
 import { getLastMessageId, useChatStore } from '@/shared/lib/chat';
 
 export function joinRoom(roomId: string): void {
   const socket = getSocket();
-  const { setActiveRoom, upsertMessages } = useChatStore.getState();
+  const { setActiveRoom, upsertMessages, markJoined } = useChatStore.getState();
   setActiveRoom(roomId);
+  markJoined(roomId);
 
   if (!socket) return;
 
@@ -34,28 +35,62 @@ export function createRoom(name: string): void {
   );
 }
 
-export function resyncActiveRoom(): void {
+function resyncRoom(roomId: string): void {
   const socket = getSocket();
   if (!socket?.connected) return;
-  const { activeRoomId, upsertMessages } = useChatStore.getState();
-  const afterId = getLastMessageId(activeRoomId);
+  const { upsertMessages, markJoined } = useChatStore.getState();
+  markJoined(roomId);
+  const afterId = getLastMessageId(roomId);
 
-  socket.emit(SocketEvents.RoomJoin, { roomId: activeRoomId });
+  socket.emit(SocketEvents.RoomJoin, { roomId });
 
   if (afterId) {
     socket.emit(
       SocketEvents.MessageHistory,
-      { roomId: activeRoomId, afterId, limit: 100 },
+      { roomId, afterId, limit: 100 },
       (res: { ok?: boolean; messages?: ChatMessage[] }) => {
-        if (res?.messages?.length) upsertMessages(activeRoomId, res.messages, 'append');
+        if (res?.messages?.length) upsertMessages(roomId, res.messages, 'append');
       },
     );
   } else {
     socket.emit(
       SocketEvents.MessageHistory,
-      { roomId: activeRoomId, limit: 50 },
+      { roomId, limit: 50 },
       (res: { ok?: boolean; messages?: ChatMessage[] }) => {
-        if (res?.messages) upsertMessages(activeRoomId, res.messages, 'replace');
+        if (res?.messages) upsertMessages(roomId, res.messages, 'replace');
+      },
+    );
+  }
+}
+
+/** Re-join all known rooms and cursor-sync history; retry failed/pending sends. */
+export function resyncActiveRoom(): void {
+  const { joinedRoomIds, activeRoomId, getPendingMessages, reconcileAck, markFailed } =
+    useChatStore.getState();
+  const rooms = new Set([...joinedRoomIds, activeRoomId, 'general']);
+  for (const roomId of rooms) resyncRoom(roomId);
+
+  const socket = getSocket();
+  if (!socket?.connected) return;
+
+  for (const msg of getPendingMessages()) {
+    socket.emit(
+      SocketEvents.MessageSend,
+      {
+        roomId: msg.roomId,
+        text: msg.text,
+        clientMsgId: msg.clientMsgId,
+      },
+      (ack: MessageAck) => {
+        if (!ack?.ok) {
+          markFailed(msg.clientMsgId);
+          return;
+        }
+        reconcileAck(msg.clientMsgId, {
+          id: ack.id,
+          createdAt: ack.createdAt,
+          status: 'sent',
+        });
       },
     );
   }

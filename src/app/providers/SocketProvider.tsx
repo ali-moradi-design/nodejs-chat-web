@@ -23,6 +23,7 @@ export function SocketProvider({ displayName, userId, children }: Props) {
   const applyIncoming = useChatStore((s) => s.applyIncoming);
   const setPresence = useChatStore((s) => s.setPresence);
   const setTyping = useChatStore((s) => s.setTyping);
+  const setLastError = useChatStore((s) => s.setLastError);
 
   useEffect(() => {
     setAuth(userId, displayName);
@@ -30,10 +31,21 @@ export function SocketProvider({ displayName, userId, children }: Props) {
 
     const onConnect = () => {
       setConnStatus('connected');
+      setLastError(null);
       resyncActiveRoom();
     };
-    const onDisconnect = () => setConnStatus('offline');
+    const onDisconnect = (reason: string) => {
+      setConnStatus(reason === 'io client disconnect' ? 'offline' : 'reconnecting');
+    };
     const onReconnectAttempt = () => setConnStatus('reconnecting');
+    const onReconnect = () => {
+      setConnStatus('connected');
+      resyncActiveRoom();
+    };
+    const onConnectError = (err: Error) => {
+      setConnStatus('reconnecting');
+      setLastError(err.message || 'Connection failed');
+    };
     const onAuthOk = (payload: { userId: string; displayName: string }) => {
       setAuth(payload.userId, payload.displayName);
     };
@@ -44,7 +56,6 @@ export function SocketProvider({ displayName, userId, children }: Props) {
       afterId?: string;
       beforeId?: string;
     }) => {
-      // Broadcast history: only full loads (no cursor) replace; cursor syncs append/prepend
       if (payload.afterId) {
         upsertMessages(payload.roomId, payload.messages, 'append');
       } else if (payload.beforeId) {
@@ -63,12 +74,18 @@ export function SocketProvider({ displayName, userId, children }: Props) {
     const onJoined = (payload: { room?: ChatRoom; users?: PresenceUser[] }) => {
       if (payload.room && payload.users) {
         setPresence(payload.room.id, payload.users);
+        useChatStore.getState().markJoined(payload.room.id);
       }
+    };
+    const onServerError = (payload: { error?: string }) => {
+      setLastError(payload?.error ?? 'Server error');
     };
 
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
+    socket.on('connect_error', onConnectError);
     socket.io.on('reconnect_attempt', onReconnectAttempt);
+    socket.io.on('reconnect', onReconnect);
     socket.on(SocketEvents.AuthOk, onAuthOk);
     socket.on(SocketEvents.RoomList, onRoomList);
     socket.on(SocketEvents.RoomJoined, onJoined);
@@ -77,6 +94,7 @@ export function SocketProvider({ displayName, userId, children }: Props) {
     socket.on(SocketEvents.PresenceUpdate, onPresence);
     socket.on(SocketEvents.TypingStart, onTypingStart);
     socket.on(SocketEvents.TypingStop, onTypingStop);
+    socket.on(SocketEvents.Error, onServerError);
 
     if (socket.connected) onConnect();
     else setConnStatus('reconnecting');
@@ -84,7 +102,9 @@ export function SocketProvider({ displayName, userId, children }: Props) {
     return () => {
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
+      socket.off('connect_error', onConnectError);
       socket.io.off('reconnect_attempt', onReconnectAttempt);
+      socket.io.off('reconnect', onReconnect);
       socket.off(SocketEvents.AuthOk, onAuthOk);
       socket.off(SocketEvents.RoomList, onRoomList);
       socket.off(SocketEvents.RoomJoined, onJoined);
@@ -93,6 +113,7 @@ export function SocketProvider({ displayName, userId, children }: Props) {
       socket.off(SocketEvents.PresenceUpdate, onPresence);
       socket.off(SocketEvents.TypingStart, onTypingStart);
       socket.off(SocketEvents.TypingStop, onTypingStop);
+      socket.off(SocketEvents.Error, onServerError);
     };
   }, [
     displayName,
@@ -104,6 +125,7 @@ export function SocketProvider({ displayName, userId, children }: Props) {
     applyIncoming,
     setPresence,
     setTyping,
+    setLastError,
   ]);
 
   return children;
