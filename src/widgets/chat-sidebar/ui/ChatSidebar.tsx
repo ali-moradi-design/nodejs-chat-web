@@ -4,6 +4,7 @@ import { createRoom, joinRoom } from '@/features/join-room';
 import { ConnectionPill } from '@/features/presence';
 import { Button } from '@/shared/ui';
 import { cn } from '@/shared/lib';
+import { RoomRow } from './RoomRow';
 
 export function ChatSidebar() {
   const rooms = useChatStore((s) => s.rooms);
@@ -129,40 +130,18 @@ export function ChatSidebar() {
               const count = presenceByRoom[room.id]?.length ?? 0;
               const active = room.id === activeRoomId;
               return (
-                <li key={room.id}>
-                  <button
-                    type="button"
-                    aria-current={active ? 'page' : undefined}
-                    onClick={() => {
-                      joinRoom(room.id);
-                      setSidebarOpen(false);
-                      requestAnimationFrame(() => document.getElementById('composer')?.focus());
-                    }}
-                    className={cn(
-                      'flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm transition-colors',
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50',
-                      active
-                        ? 'bg-accent/15 text-foreground ring-1 ring-accent/20'
-                        : 'text-muted hover:bg-elevated hover:text-foreground',
-                    )}
-                  >
-                    <span className="truncate font-medium tracking-tight">
-                      <span className="mr-1 text-muted/80" aria-hidden>
-                        #
-                      </span>
-                      {room.name}
-                    </span>
-                    <span
-                      className={cn(
-                        'ml-2 min-w-5 rounded-full px-1.5 py-0.5 text-center text-[10px] tabular-nums',
-                        active ? 'bg-accent/25 text-accent-fg' : 'bg-surface text-muted',
-                      )}
-                      aria-label={`${count} online`}
-                    >
-                      {count}
-                    </span>
-                  </button>
-                </li>
+                <RoomRow
+                  key={room.id}
+                  id={room.id}
+                  name={room.name}
+                  count={count}
+                  active={active}
+                  onSelect={(id) => {
+                    joinRoom(id);
+                    setSidebarOpen(false);
+                    requestAnimationFrame(() => document.getElementById('composer')?.focus());
+                  }}
+                />
               );
             })}
           </ul>

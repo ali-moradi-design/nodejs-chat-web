@@ -1,29 +1,39 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { MessageBubble } from '@/entities/message';
 import { TypingIndicator } from '@/features/typing';
 import { StatusBanners } from '@/features/presence';
 import { retryMessage } from '@/features/send-message';
 import { useChatStore } from '@/shared/lib/chat';
 import { Button, Spinner } from '@/shared/ui';
 import { cn } from '@/shared/lib';
+import { MessageList } from './MessageList';
 
 export function ChatThread() {
   const activeRoomId = useChatStore((s) => s.activeRoomId);
-  const rooms = useChatStore((s) => s.rooms);
-  const messages = useChatStore((s) => s.messagesByRoom[activeRoomId] ?? []);
+  const roomName = useChatStore(
+    (s) => s.rooms.find((r) => r.id === s.activeRoomId)?.name ?? s.activeRoomId,
+  );
+  const messages = useChatStore((s) => s.messagesByRoom[s.activeRoomId] ?? EMPTY_MESSAGES);
   const userId = useChatStore((s) => s.userId);
   const setSidebarOpen = useChatStore((s) => s.setSidebarOpen);
   const sidebarOpen = useChatStore((s) => s.sidebarOpen);
-  const presence = useChatStore((s) => s.presenceByRoom[activeRoomId] ?? []);
+  const presenceLabel = useChatStore((s) => {
+    const presence = s.presenceByRoom[s.activeRoomId] ?? [];
+    if (presence.length === 0) return '0 online';
+    const names = presence
+      .slice(0, 4)
+      .map((u) => u.displayName)
+      .join(', ');
+    return `${presence.length} online · ${names}${presence.length > 4 ? '…' : ''}`;
+  });
   const connStatus = useChatStore((s) => s.connStatus);
 
   const scrollerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const stuckRef = useRef(true);
   const [stuckToBottom, setStuckToBottom] = useState(true);
   const [unseen, setUnseen] = useState(0);
   const [historyLoaded, setHistoryLoaded] = useState(false);
-
-  const room = rooms.find((r) => r.id === activeRoomId);
+  const prevLenRef = useRef(0);
 
   useEffect(() => {
     setHistoryLoaded(false);
@@ -37,21 +47,30 @@ export function ChatThread() {
 
   const scrollToBottom = useCallback((smooth = true) => {
     bottomRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'instant' });
+    stuckRef.current = true;
     setStuckToBottom(true);
     setUnseen(0);
   }, []);
 
+  const onRetry = useCallback((clientMsgId: string) => {
+    retryMessage(clientMsgId);
+  }, []);
+
   useEffect(() => {
-    if (stuckToBottom) {
+    const grew = messages.length > prevLenRef.current;
+    prevLenRef.current = messages.length;
+    if (!grew) return;
+    if (stuckRef.current) {
       scrollToBottom(false);
     } else {
       setUnseen((n) => n + 1);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages.length, activeRoomId]);
+  }, [messages.length, activeRoomId, scrollToBottom]);
 
   useEffect(() => {
+    prevLenRef.current = 0;
     setUnseen(0);
+    stuckRef.current = true;
     setStuckToBottom(true);
     requestAnimationFrame(() => scrollToBottom(false));
   }, [activeRoomId, scrollToBottom]);
@@ -61,6 +80,7 @@ export function ChatThread() {
     if (!el) return;
     const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
     const atBottom = dist < 80;
+    stuckRef.current = atBottom;
     setStuckToBottom(atBottom);
     if (atBottom) setUnseen(0);
   }
@@ -84,17 +104,9 @@ export function ChatThread() {
         </Button>
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-[17px] font-semibold tracking-tight">
-            <span className="text-muted/70">#</span> {room?.name ?? activeRoomId}
+            <span className="text-muted/70">#</span> {roomName}
           </h1>
-          <p className="truncate text-xs text-muted">
-            {presence.length} online
-            {presence.length > 0
-              ? ` · ${presence
-                  .slice(0, 4)
-                  .map((u) => u.displayName)
-                  .join(', ')}${presence.length > 4 ? '…' : ''}`
-              : ''}
-          </p>
+          <p className="truncate text-xs text-muted">{presenceLabel}</p>
         </div>
       </header>
 
@@ -124,32 +136,16 @@ export function ChatThread() {
               </h2>
               <p className="max-w-md text-sm leading-relaxed text-muted">
                 {connStatus === 'connected'
-                  ? `Messages appear here in real time. Say hello in #${room?.name ?? activeRoomId} — everyone in the room will see it instantly.`
+                  ? `Messages appear here in real time. Say hello in #${roomName} — everyone in the room will see it instantly.`
                   : 'Connect to the server to load history and send messages.'}
               </p>
             </div>
           </div>
         ) : (
-          <div className="mx-auto flex max-w-4xl flex-col gap-3.5 py-8">
-            {messages.map((m, i) => {
-              const prev = messages[i - 1];
-              const showAvatar =
-                !prev ||
-                prev.userId !== m.userId ||
-                new Date(m.createdAt).getTime() - new Date(prev.createdAt).getTime() >
-                  5 * 60_000;
-              return (
-                <MessageBubble
-                  key={m.clientMsgId}
-                  message={m}
-                  isOwn={m.userId === userId}
-                  showAvatar={showAvatar}
-                  onRetry={retryMessage}
-                />
-              );
-            })}
+          <>
+            <MessageList messages={messages} userId={userId} onRetry={onRetry} />
             <div ref={bottomRef} />
-          </div>
+          </>
         )}
       </div>
 
@@ -171,3 +167,5 @@ export function ChatThread() {
     </section>
   );
 }
+
+const EMPTY_MESSAGES: never[] = [];
