@@ -1,1 +1,1 @@
-export { sendMessage } from './model/send';
+export { retryMessage, sendMessage } from './model/send';

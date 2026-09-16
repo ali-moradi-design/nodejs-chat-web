@@ -1,15 +1,16 @@
 import { memo } from 'react';
 import type { ChatMessage } from '@/shared/lib/socket';
-import { Avatar } from '@/shared/ui';
+import { Avatar, Button } from '@/shared/ui';
 import { cn, formatTime } from '@/shared/lib';
 
 type Props = {
   message: ChatMessage;
   isOwn: boolean;
   showAvatar: boolean;
+  onRetry?: (clientMsgId: string) => void;
 };
 
-function MessageBubbleComponent({ message, isOwn, showAvatar }: Props) {
+function MessageBubbleComponent({ message, isOwn, showAvatar, onRetry }: Props) {
   const failed = message.status === 'failed';
   const pending = message.status === 'pending';
 
@@ -56,9 +57,24 @@ function MessageBubbleComponent({ message, isOwn, showAvatar }: Props) {
         </div>
 
         {pending || failed ? (
-          <span className={cn('px-1.5 text-[11px]', failed ? 'text-danger' : 'text-muted')}>
-            {failed ? 'Failed to send' : 'Sending…'}
-          </span>
+          <div
+            className={cn(
+              'flex items-center gap-2 px-1.5 text-[11px]',
+              failed ? 'text-danger' : 'text-muted',
+            )}
+          >
+            <span>{failed ? 'Failed to send' : 'Sending…'}</span>
+            {failed && onRetry ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-[11px] text-danger"
+                onClick={() => onRetry(message.clientMsgId)}
+              >
+                Retry
+              </Button>
+            ) : null}
+          </div>
         ) : null}
       </div>
     </div>

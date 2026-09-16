@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { MessageBubble } from '@/entities/message';
 import { TypingIndicator } from '@/features/typing';
+import { StatusBanners } from '@/features/presence';
+import { retryMessage } from '@/features/send-message';
 import { useChatStore } from '@/shared/lib/chat';
-import { Button } from '@/shared/ui';
+import { Button, Spinner } from '@/shared/ui';
 import { cn } from '@/shared/lib';
 
 export function ChatThread() {
@@ -13,13 +15,25 @@ export function ChatThread() {
   const setSidebarOpen = useChatStore((s) => s.setSidebarOpen);
   const sidebarOpen = useChatStore((s) => s.sidebarOpen);
   const presence = useChatStore((s) => s.presenceByRoom[activeRoomId] ?? []);
+  const connStatus = useChatStore((s) => s.connStatus);
 
   const scrollerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [stuckToBottom, setStuckToBottom] = useState(true);
   const [unseen, setUnseen] = useState(0);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
 
   const room = rooms.find((r) => r.id === activeRoomId);
+
+  useEffect(() => {
+    setHistoryLoaded(false);
+    const t = setTimeout(() => setHistoryLoaded(true), 400);
+    return () => clearTimeout(t);
+  }, [activeRoomId]);
+
+  useEffect(() => {
+    if (messages.length > 0) setHistoryLoaded(true);
+  }, [messages.length]);
 
   const scrollToBottom = useCallback((smooth = true) => {
     bottomRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'instant' });
@@ -51,6 +65,9 @@ export function ChatThread() {
     if (atBottom) setUnseen(0);
   }
 
+  const showLoading =
+    !historyLoaded && messages.length === 0 && connStatus === 'connected';
+
   return (
     <section className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-surface">
       <header className="flex items-center gap-3 border-b border-border/80 px-3 py-3.5 md:px-8">
@@ -81,6 +98,8 @@ export function ChatThread() {
         </div>
       </header>
 
+      <StatusBanners />
+
       <div
         ref={scrollerRef}
         onScroll={onScroll}
@@ -89,18 +108,24 @@ export function ChatThread() {
         aria-live="polite"
         aria-relevant="additions"
       >
-        {messages.length === 0 ? (
+        {showLoading ? (
+          <div className="flex h-full flex-col items-center justify-center gap-3 text-muted">
+            <Spinner className="h-6 w-6" />
+            <p className="text-sm">Loading messages…</p>
+          </div>
+        ) : messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
             <div className="flex h-16 w-16 items-center justify-center rounded-3xl border border-accent/20 bg-accent/10 text-3xl text-accent-fg shadow-lg shadow-accent/5">
               ✦
             </div>
             <div className="space-y-2">
               <h2 className="text-xl font-semibold tracking-tight text-foreground">
-                Start the conversation
+                {connStatus === 'connected' ? 'Start the conversation' : 'Waiting for connection'}
               </h2>
               <p className="max-w-md text-sm leading-relaxed text-muted">
-                Messages appear here in real time. Say hello in #{room?.name ?? activeRoomId} —
-                everyone in the room will see it instantly.
+                {connStatus === 'connected'
+                  ? `Messages appear here in real time. Say hello in #${room?.name ?? activeRoomId} — everyone in the room will see it instantly.`
+                  : 'Connect to the server to load history and send messages.'}
               </p>
             </div>
           </div>
@@ -119,6 +144,7 @@ export function ChatThread() {
                   message={m}
                   isOwn={m.userId === userId}
                   showAvatar={showAvatar}
+                  onRetry={retryMessage}
                 />
               );
             })}
