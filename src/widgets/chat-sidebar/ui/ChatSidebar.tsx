@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useChatStore } from '@/shared/lib/chat';
 import { createRoom, joinRoom } from '@/features/join-room';
 import { ConnectionPill } from '@/features/presence';
@@ -16,6 +16,13 @@ export function ChatSidebar() {
   const theme = useChatStore((s) => s.theme);
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
+  const asideRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (sidebarOpen && window.innerWidth < 768) {
+      asideRef.current?.querySelector<HTMLElement>('button, a, input')?.focus();
+    }
+  }, [sidebarOpen]);
 
   function onCreate(e: FormEvent) {
     e.preventDefault();
@@ -38,9 +45,12 @@ export function ChatSidebar() {
       ) : null}
 
       <aside
+        ref={asideRef}
+        id="room-sidebar"
+        aria-label="Rooms and presence"
         className={cn(
-          'fixed inset-y-0 left-0 z-40 flex w-[288px] flex-col border-r border-border bg-panel',
-          'transition-transform duration-200 ease-out md:static md:translate-x-0',
+          'fixed inset-y-0 left-0 z-40 flex w-[min(288px,88vw)] flex-col border-r border-border bg-panel',
+          'transition-transform duration-200 ease-out md:static md:w-[288px] md:translate-x-0',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
@@ -51,7 +61,18 @@ export function ChatSidebar() {
             </p>
             <h2 className="truncate text-xl font-semibold tracking-tight">Chat</h2>
           </div>
-          <ConnectionPill />
+          <div className="flex items-center gap-1">
+            <ConnectionPill />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-lg md:hidden"
+              aria-label="Close rooms sidebar"
+              onClick={() => setSidebarOpen(false)}
+            >
+              ✕
+            </Button>
+          </div>
         </div>
 
         <div className="mx-3 mb-3 flex items-center gap-2 rounded-2xl border border-border/70 bg-elevated/60 px-3 py-2.5">
@@ -79,6 +100,7 @@ export function ChatSidebar() {
             size="sm"
             className="h-7 rounded-lg text-xs"
             onClick={() => setCreating((v) => !v)}
+            aria-expanded={creating}
           >
             {creating ? 'Cancel' : '+ New'}
           </Button>
@@ -86,7 +108,11 @@ export function ChatSidebar() {
 
         {creating ? (
           <form onSubmit={onCreate} className="px-3 pb-3">
+            <label htmlFor="new-room" className="sr-only">
+              New room name
+            </label>
             <input
+              id="new-room"
               autoFocus
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
@@ -98,7 +124,7 @@ export function ChatSidebar() {
         ) : null}
 
         <nav className="flex-1 overflow-y-auto px-2.5 pb-5" aria-label="Rooms">
-          <ul className="space-y-1">
+          <ul className="space-y-1" role="list">
             {rooms.map((room) => {
               const count = presenceByRoom[room.id]?.length ?? 0;
               const active = room.id === activeRoomId;
@@ -106,19 +132,24 @@ export function ChatSidebar() {
                 <li key={room.id}>
                   <button
                     type="button"
+                    aria-current={active ? 'page' : undefined}
                     onClick={() => {
                       joinRoom(room.id);
                       setSidebarOpen(false);
+                      requestAnimationFrame(() => document.getElementById('composer')?.focus());
                     }}
                     className={cn(
                       'flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm transition-colors',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50',
                       active
                         ? 'bg-accent/15 text-foreground ring-1 ring-accent/20'
                         : 'text-muted hover:bg-elevated hover:text-foreground',
                     )}
                   >
                     <span className="truncate font-medium tracking-tight">
-                      <span className="mr-1 text-muted/80">#</span>
+                      <span className="mr-1 text-muted/80" aria-hidden>
+                        #
+                      </span>
                       {room.name}
                     </span>
                     <span
@@ -126,7 +157,7 @@ export function ChatSidebar() {
                         'ml-2 min-w-5 rounded-full px-1.5 py-0.5 text-center text-[10px] tabular-nums',
                         active ? 'bg-accent/25 text-accent-fg' : 'bg-surface text-muted',
                       )}
-                      title={`${count} online`}
+                      aria-label={`${count} online`}
                     >
                       {count}
                     </span>

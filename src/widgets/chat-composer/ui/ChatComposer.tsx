@@ -37,7 +37,7 @@ export function ChatComposer() {
   }
 
   return (
-    <div className="border-t border-border/80 bg-panel/90 px-3 py-3 backdrop-blur-md md:px-8 md:py-4">
+    <div className="border-t border-border/80 bg-panel/90 px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md md:px-8 md:py-4">
       <div
         className={cn(
           'mx-auto flex max-w-3xl items-end gap-2 rounded-3xl border border-border bg-elevated/80 p-2 pl-3',
@@ -75,7 +75,7 @@ export function ChatComposer() {
         </Button>
       </div>
       <p className="mx-auto mt-2.5 max-w-3xl px-1 text-[11px] text-muted/80">
-        Plain text only · max 4000 characters
+        Plain text only · max 4000 · Ctrl/⌘+/ focus composer
       </p>
     </div>
   );

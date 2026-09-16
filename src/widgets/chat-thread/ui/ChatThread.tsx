@@ -11,6 +11,7 @@ export function ChatThread() {
   const messages = useChatStore((s) => s.messagesByRoom[activeRoomId] ?? []);
   const userId = useChatStore((s) => s.userId);
   const setSidebarOpen = useChatStore((s) => s.setSidebarOpen);
+  const sidebarOpen = useChatStore((s) => s.sidebarOpen);
   const presence = useChatStore((s) => s.presenceByRoom[activeRoomId] ?? []);
 
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -57,7 +58,9 @@ export function ChatThread() {
           variant="ghost"
           size="icon"
           className="rounded-xl md:hidden"
-          aria-label="Open rooms"
+          aria-label="Open rooms sidebar"
+          aria-controls="room-sidebar"
+          aria-expanded={sidebarOpen}
           onClick={() => setSidebarOpen(true)}
         >
           ☰
